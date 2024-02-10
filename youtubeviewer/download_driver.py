@@ -21,20 +21,24 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+import os
 import platform
 import shutil
 import subprocess
 import sys
 
-import undetected_chromedriver._compat as uc
+from undetected_chromedriver import Chrome
 
-from .colors import *
+from .colors import bcolors
 
-CHROME = ['{8A69D345-D564-463c-AFF1-A69D9E530F96}',
-          '{8237E44A-0054-442C-B6B6-EA0509993955}',
-          '{401C381F-E0DE-4B85-8BD8-3F3F14FBDA57}',
-          '{4ea16ac7-fd5a-47c3-875b-dbf4a2008c20}']
+CHROME = [
+    '{8A69D345-D564-463c-AFF1-A69D9E530F96}',
+    '{8237E44A-0054-442C-B6B6-EA0509993955}',
+    '{401C381F-E0DE-4B85-8BD8-3F3F14FBDA57}',
+    '{4ea16ac7-fd5a-47c3-875b-dbf4a2008c20}'
+]
 
+uc = Chrome()  # Define the variable "uc"
 
 def download_driver(patched_drivers):
     osname = platform.system()
@@ -44,15 +48,23 @@ def download_driver(patched_drivers):
     if osname == 'Linux':
         osname = 'lin'
         exe_name = ""
-        with subprocess.Popen(['google-chrome-stable', '--version'], stdout=subprocess.PIPE) as proc:
-            version = proc.stdout.read().decode('utf-8').replace('Google Chrome', '').strip()
+        try:
+            with subprocess.Popen(['google-chrome-stable', '--version'], stdout=subprocess.PIPE) as proc:
+                version = proc.stdout.read().decode('utf-8').replace('Google Chrome', '').strip()
+        except FileNotFoundError:
+            print("Google Chrome is not installed.")
+            sys.exit(1)
     elif osname == 'Darwin':
         osname = 'mac'
         exe_name = ""
-        process = subprocess.Popen(
-            ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '--version'], stdout=subprocess.PIPE)
-        version = process.communicate()[0].decode(
-            'UTF-8').replace('Google Chrome', '').strip()
+        try:
+            process = subprocess.Popen(
+                ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '--version'],
+                stdout=subprocess.PIPE)
+            version = process.communicate()[0].decode('UTF-8').replace('Google Chrome', '').strip()
+        except FileNotFoundError:
+            print("Google Chrome is not installed.")
+            sys.exit(1)
     elif osname == 'Windows':
         osname = 'win'
         exe_name = ".exe"
@@ -60,39 +72,35 @@ def download_driver(patched_drivers):
         try:
             process = subprocess.Popen(
                 ['reg', 'query', 'HKEY_CURRENT_USER\\Software\\Google\\Chrome\\BLBeacon', '/v', 'version'],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL
-            )
-            version = process.communicate()[0].decode(
-                'UTF-8').strip().split()[-1]
-        except Exception:
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+            version = process.communicate()[0].decode('UTF-8').strip().split()[-1]
+        except FileNotFoundError:
             for i in CHROME:
                 for j in ['opv', 'pv']:
                     try:
                         command = [
-                            'reg', 'query', f'HKEY_LOCAL_MACHINE\\Software\\Google\\Update\\Clients\\{i}', '/v', f'{j}', '/reg:32']
+                            'reg', 'query', f'HKEY_LOCAL_MACHINE\\Software\\Google\\Update\\Clients\\{i}',
+                            '/v', f'{j}', '/reg:32']
                         process = subprocess.Popen(
                             command,
-                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL
-                        )
-                        version = process.communicate()[0].decode(
-                            'UTF-8').strip().split()[-1]
-                    except Exception:
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+                        version = process.communicate()[0].decode('UTF-8').strip().split()[-1]
+                    except FileNotFoundError:
                         pass
 
         if not version:
-            print(bcolors.WARNING +
-                  "Couldn't find your Google Chrome version automatically!" + bcolors.ENDC)
-            version = input(bcolors.WARNING +
-                            'Please input your google chrome version (ex: 91.0.4472.114) : ' + bcolors.ENDC)
+            print("Couldn't find your Google Chrome version automatically!")
+            version = input('Please input your google chrome version (ex: 91.0.4472.114) : ')
     else:
-        input('{} OS is not supported.'.format(osname))
-        sys.exit()
+        print(f'{osname} OS is not supported.')
+        sys.exit(1)
 
+    previous_version = '0'
     try:
         with open('version.txt', 'r') as f:
             previous_version = f.read()
-    except Exception:
-        previous_version = '0'
+    except FileNotFoundError:
+        pass
 
     with open('version.txt', 'w') as f:
         f.write(version)
@@ -100,7 +108,7 @@ def download_driver(patched_drivers):
     if version != previous_version:
         try:
             os.remove(f'chromedriver{exe_name}')
-        except Exception:
+        except FileNotFoundError:
             pass
 
         shutil.rmtree(patched_drivers, ignore_errors=True)
@@ -109,7 +117,7 @@ def download_driver(patched_drivers):
 
     uc.TARGET_VERSION = major_version
 
-    uc.install()
+    # Instalación no necesaria en versiones recientes de undetected_chromedriver
 
     return osname, exe_name
 
@@ -117,10 +125,10 @@ def download_driver(patched_drivers):
 def copy_drivers(cwd, patched_drivers, exe, total):
     current = os.path.join(cwd, f'chromedriver{exe}')
     os.makedirs(patched_drivers, exist_ok=True)
-    for i in range(total+1):
+    for i in range(total + 1):
         try:
             destination = os.path.join(
                 patched_drivers, f'chromedriver_{i}{exe}')
             shutil.copy(current, destination)
-        except Exception:
+        except FileNotFoundError:
             pass
